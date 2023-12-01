@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+
+    <title>reveal.js</title>
+
+    <link rel="stylesheet" href="dist/reset.css" />
+    <link rel="stylesheet" href="dist/reveal.css" />
+    <link rel="stylesheet" href="dist/theme/black.css" />
+
+    <!-- Theme used for syntax highlighted code -->
+    <link rel="stylesheet" href="plugin/highlight/monokai.css" />
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section>
+          <h3>Полнотекстовый поиск</h3>
+        </section>
+        <section>
+          <p>
+            Полнотекстовый поиск – это метод, используемый поисковыми системами
+            для поиска результатов в базе данных. Вы можете использовать его для
+            поиска результатов на новостных сайтах, в онлайн-магазинах и т. п.
+          </p>
+        </section>
+        <section>
+          <p>
+            FTS извлекает документы – объекты базы данных, содержащие текстовые
+            данные, которые не соответствуют критериям поиска. Если, к примеру,
+            пользователь вводит запрос «овощи и фрукты», приложение с поддержкой
+            FTS может возвращать результаты, которые содержат:
+          </p>
+          <ul>
+            <li>
+              отдельные слова из запроса (например, только «овощи» или «фрукты»)
+            </li>
+            <li>слова в другом порядке («фрукты и овощи»)</li>
+            <li>варианты слов («овощ» или «фрукт»).</li>
+          </ul>
+        </section>
+        <section>
+          <p>
+            Системы управления базами данных (СУБД), такие как PostgreSQL,
+            обычно поддерживают частичный поиск текста помощью оператора LIKE.
+            Однако такие запросы, как правило, не срабатывают на больших наборах
+            данных. Они также должны полностью соответствовать запросу
+            пользователя, то есть запрос может не дать никаких результатов, даже
+            если в БД есть документы с соответствующей информацией.
+          </p>
+        </section>
+        <section>
+          <p>Создадим таблицу для наших примеров</p>
+          <pre><code data-line-numbers>CREATE TABLE news (
+  id INT NOT NULL AUTO_INCREMENT,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  author TEXT NOT NULL,
+  PRIMARY KEY (id)
+);</code></pre>
+        </section>
+        <section>
+          <p>Наполним данными нашу таблицу</p>
+          <pre><code data-line-numbers>INSERT INTO news (id, title, content, author) VALUES
+(1, 'Pacific Northwest high-speed rail line', 'Currently there are only a few options for traveling the 140 miles between Seattle and Vancouver and none of them are ideal.', 'Greg'),
+(2, 'Hitting the beach was voted the best part of life in the region', 'Exploring tracks and trails was second most popular, followed by visiting the shops and then traveling to local parks.', 'Ethan'),
+(3, 'Machine Learning from scratch', 'Bare bones implementations of some of the foundational models and algorithms.', 'Jo');</code></pre>
+        </section>
+        <section>
+          <p>Создадим простой полнотекстовый индекс</p>
+          <pre><code data-line-numbers="">ALTER TABLE news ADD FULLTEXT (title, content, author);</code></pre>
+        </section>
+        <section>
+          <p>Делаем запрос</p>
+          <pre><code data-line-numbers="">SELECT * FROM news WHERE MATCH (title,content,author) 
+            AGAINST ('Seattle beach' IN NATURAL LANGUAGE MODE)</code></pre>
+          <p style="font-size: 27px">
+            Часть команды MATCH() указывает, какой набор столбцов индексируется
+            с помощью полнотекстового поиска; здесь нужно указать список
+            столбцов, который использовался для создания индекса. Часть
+            AGAINST() указывает, какое слово применяется для полнотекстового
+            поиска (в данном примере это Seattle beach).
+          </p>
+        </section>
+        <section>
+          <p>
+            IN NATURAL LANGUAGE MODE включает режим, при котором слова для
+            поиска поступают непосредственно из пользовательского ввода без
+            предварительной обработки. MySQL по умолчанию использует этот режим,
+            поэтому явно указывать его не нужно.
+          </p>
+        </section>
+        <section>
+          <p>Результаты поиска</p>
+          <p>
+            ***************** 1. row *****************
+            <br />
+            <span>id: 1</span>
+
+            <span>title: Pacific Northwest high-speed rail line</span>
+            <br />
+            <span
+              >content: Currently there are only a few options for traveling the
+              140 miles between Seattle and Vancouver and none of them are
+              ideal.</span
+            >
+            <br />
+            <span>author: Greg</span>
+            <br />
+            <span>***************** 2. row ******************</span>
+            <br />
+            <span>id: 2</span>
+            <br />
+            <span
+              >title: Hitting the beach was voted the best part of life in the
+              region</span
+            >
+            <br />
+            <span>
+              content: Exploring tracks and trails was second most popular,
+              followed by visiting the shops and then traveling to local parks.
+            </span>
+            <br />
+            <span>author: Ethan</span>
+            2 rows in set (0.00 sec)
+          </p>
+        </section>
+        <section>
+          <p>
+            В таблице не нашлось записей, содержащих запрос «Seattle beach». Но
+            полнотекстовый поиск обнаруживает два результата: в первой строке
+            содержится только слово «Seattle», а во второй содержится только
+            слово «beach». Вы можете попробовать создать дополнительные запросы,
+            изменив ключевые слова.
+          </p>
+        </section>
+        <section>
+          <h3>Оптимизация полнотекстового поиска</h3>
+          <p>
+            Есть два метода, которые могут помочь сделать результаты
+            полнотекстового поиска более актуальными. Первый метод – фильтрация
+            по релевантности результатов. Второй – исключение слов из
+            результатов с помощью IN BOOLEAN
+          </p>
+        </section>
+        <section>
+          <h4>Фильтрация результатов по релевантности</h4>
+          <p>
+            Оценка релевантности результата определяет, насколько хорошо он
+            совпадает с поисковым запросом, где 0 – самая низкая оценка. Оценка
+            релевантности основана на ряде факторов, в том числе на том, как
+            часто слово встречается в конкретном документе и в скольких
+            документах содержится это слово.
+          </p>
+        </section>
+        <section>
+          <p>
+            Попробуйте определить оценку релевантности каждого ряда на основе
+            запроса «traveling to parks».
+          </p>
+        </section>
+        <section>
+          <p>Получаем реаливантность</p>
+          <pre><code>SELECT id, MATCH (title,content,author) 
+            AGAINST ('traveling to parks') as score FROM news; </code></pre>
+        </section>
+        <section>
+          <p>Результат</p>
+          <code
+            >Команда вернет:<br />
+            +----+----------------------+<br />
+            | id |
+            score&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            |<br />
+            +----+----------------------+<br />
+            |&nbsp; 1 | 0.031008131802082062 |<br />
+            |&nbsp; 2 |&nbsp; 0.25865283608436584 |<br />
+            |&nbsp; 3 |&nbsp;
+            0&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            |<br />
+            +----+----------------------+<br />
+            3 rows in set (0.00 sec)</code
+          >
+        </section>
+        <section>
+          <p>Объяснение результата</p>
+          <p>
+            Третья строка имеет оценку релевантности 0, так как в ней нет ни
+            одного слова из поиска. Первая строка содержит слово «traveling», но
+            в ней нет «to» или «parks», потому она получает очень низкую оценку
+            релевантности 0,03. Вторая строка, содержащая все слова, имеет самый
+            высокий показатель релевантности 0,25.
+          </p>
+        </section>
+        <section>
+          <p>Метод IN BOOLEAN</p>
+          <p>
+            Ранее при указании условия запроса мы использовали режим по
+            умолчанию IN NATURAL LANGUAGE. Существует еще один режим – IN
+            BOOLEAN, который позволяет исключать определенные слова из поиска,
+            определять диапазон поисковых слов и многое другое.
+          </p>
+        </section>
+        <section>
+          <p>
+            Чтобы исключить слово из запроса, используйте минус в IN BOOLEAN.
+            Следующая команда вернет результаты, содержащие слово «traveling»,
+            исключая слово «Seattle».
+          </p>
+        </section>
+        <section>
+          <code
+            >SELECT * FROM news WHERE MATCH (title,content,author) AGAINST
+            ('traveling -Seattle' IN BOOLEAN MODE)<br />
+            *********** 1. row ***********<br />
+            id: 2<br />
+            title: Hitting the beach was voted the best part of life in the
+            region<br />
+            content: Exploring tracks and trails was second most popular,
+            followed by visiting the shops and then traveling to local parks.<br />
+            author: Ethan<br />
+            1 row in set (0.01 sec)</code
+          >
+        </section>
+        <section>
+          <p>
+            Оператор минус отмечает все документы, содержащие исключенное слово,
+            показателем релевантности 0. В этом режиме показаны только
+            результаты с ненулевой оценкой релевантности
+          </p>
+        </section>
+        <section>
+          <p>
+            Мы также можем использовать IN BOOLEAN MODE, чтобы указать
+            максимальное расстояние между словами поиска. Это расстояние
+            измеряется в словах и, что важно, включает условия поиска. Например,
+            во фразе «cats and dogs» расстояние 3.
+          </p>
+        </section>
+        <section>
+          <p>
+            Следующая команда возвращает результаты, в которых слова «traveling»
+            и «miles» встречаются на расстоянии не более двух слов.
+          </p>
+        </section>
+        <section>
+          <code
+            >SELECT * FROM news WHERE MATCH (title,content,author) AGAINST
+            ('"traveling miles" <u>@4</u>' IN BOOLEAN MODE)\G<br />
+            ************ 1. row ************<br />
+            id: 1<br />
+            title: Pacific Northwest high-speed rail line<br />
+            content: Currently there are only a few options for traveling the
+            140 miles between Seattle and Vancouver and none of them are
+            ideal.<br />
+            author: Greg<br />
+            1 row in set (0.00 sec)</code
+          >
+        </section>
+        <section>
+          <p>
+            Если изменить @4 на @3 в исходной команде, мы не увидим никаких
+            результатов.
+          </p>
+        </section>
+        <section>
+          <p>
+            Ограничение результатов поиска по расстоянию между поисковыми
+            словами может быть полезно при поиске по очень крупным документам.
+            Чем меньше разрыв между словами, тем точнее будут результаты. Тонкая
+            настройка этой функции будет зависеть от набора документов, с
+            которыми вы работаете
+          </p>
+        </section>
+        <section>
+          <p>
+            В логическом режиме полнотекстового поиска поддерживаются следующие
+            операторы:
+          </p>
+        </section>
+        <section>
+          <p>
+            + Предшествующий слову знак "плюс" показывает, что это слово должно
+            присутствовать в каждой возвращенной строке
+          </p>
+        </section>
+        <section>
+          <p>
+            - Предшествующий слову знак "минус" означает, что это слово не
+            должно присутствовать в какой-либо возвращенной строке.
+          </p>
+        </section>
+        <section>
+          <p>
+            < > Эти два оператора используются для того, чтобы изменить вклад
+            слова в величину релевантности, которое приписывается строке.
+            Оператор < уменьшает этот вклад, а оператор > - увеличивает его.
+          </p>
+        </section>
+        <section>
+          <p>( ) Круглые скобки группируют слова в подвыражения.</p>
+        </section>
+        <section>
+          <p>
+            ~ Предшествующий слову знак "тильда" воздействует как оператор
+            отрицания, обуславливая негативный вклад данного слова в
+            релевантность строки. Им отмечают нежелательные слова. Строка,
+            содержащая такое слово, будет оценена ниже других, но не будет
+            исключена совершенно, как в случае оператора - "минус".
+          </p>
+        </section>
+        <section>
+          <p>
+            * Звездочка является оператором усечения. В отличие от остальных
+            операторов, она должна добавляться в конце слова, а не в начале.
+          </p>
+        </section>
+        <section>
+          <p>
+            " Фраза, заключенная в двойные кавычки, соответствует только
+            строкам, содержащим эту фразу, написанную буквально.
+          </p>
+        </section>
+        <section>
+          <p>Пару примеров:</p>
+          <ul type="disc" style="font-size: 16px">
+            <li>
+              <p><code class="literal">apple banana</code></p>
+              <p>
+                находит строки, содержащие по меньшей мере одно из этих слов.
+              </p>
+            </li>
+            <li>
+              <p><code class="literal">+apple +juice</code></p>
+              <p>... оба слова.</p>
+            </li>
+            <li>
+              <p><code class="literal">+apple macintosh</code></p>
+              <p>
+                ... слово "apple", но ранг строки выше, если она также содержит
+                слово "macintosh".
+              </p>
+            </li>
+            <li>
+              <p><code class="literal">+apple -macintosh</code></p>
+              <p>... слово "apple", но не "macintosh".</p>
+            </li>
+            <li>
+              <p><code class="literal">+apple +(&gt;pie &lt;strudel)</code></p>
+              <p>
+                ... "apple" и "pie", или "apple" и "strudel" (в любом порядке),
+                но ранг "apple pie" выше, чем "apple strudel".
+              </p>
+            </li>
+            <li>
+              <p><code class="literal">apple*</code></p>
+              <p>... "apple", "apples", "applesauce", и "applet".</p>
+            </li>
+            <li>
+              <p><code class="literal">"some words"</code></p>
+              <p>... "some words of wisdom", но не "some noise words".</p>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+    <script src="dist/reveal.js"></script>
+    <script src="plugin/notes/notes.js"></script>
+    <script src="plugin/markdown/markdown.js"></script>
+    <script src="plugin/highlight/highlight.js"></script>
+    <script
+      src="https://code.jquery.com/jquery-3.7.1.min.js"
+      integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      // More info about initialization & config:
+      // - https://revealjs.com/initialization/
+      // - https://revealjs.com/config/
+      Reveal.initialize({
+        hash: true,
+        // Learn about plugins: https://revealjs.com/plugins/
+        plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
+      });
+
+      // $("pre code").each(function(){
+      //     var html = $(this).html();
+      //     var pattern = html.match(/\s*\n[\t\s]*/);
+      //     $(this).html(html.replace(new RegExp(pattern, "g"),'\n'));
+      // });
+    </script>
+  </body>
+</html>
